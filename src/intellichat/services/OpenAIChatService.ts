@@ -99,9 +99,32 @@ export default class OpenAIChatService
     const processedMessages = await Promise.all(
       messages.map(async (msg) => {
         if (msg.role === 'tool') {
+          // Helper function to format tool message content
+          const format_tool_msg_content = (content: any): string => {
+            if (typeof content === 'string') {
+              // If it's already a string, use it directly
+              return content;
+            } else if (Array.isArray(content)) {
+              // If it's an array, ensure each element is a string
+              return content.map(item => {
+                if (typeof item === 'string') {
+                  return item;
+                } else if (item && typeof item === 'object' && item.type === 'text' && item.text) {
+                  // Special case for objects with text property
+                  return item.text;
+                } else {
+                  return JSON.stringify(item);
+                }
+              }).join(' ');
+            } else {
+              // If it's not a string or array, stringify it
+              return JSON.stringify(content);
+            }
+          };
+
           return {
             role: 'tool',
-            content: JSON.stringify(msg.content),
+            content: format_tool_msg_content(msg.content),
             name: msg.name,
             tool_call_id: msg.tool_call_id,
           };
@@ -150,6 +173,21 @@ export default class OpenAIChatService
     tool: ITool,
     toolResult: any,
   ): IChatRequestMessage[] {
+    // Inline function to extract content from tool result
+    const getToolResultContent = (result: any): any => {
+      if (result === null || result === undefined) {
+        return '';
+      }
+      
+      // If result has a content property, use that
+      if (result && result.content !== undefined) {
+        return result.content;
+      }
+      
+      // Otherwise use the result itself
+      return result;
+    };
+
     return [
       {
         role: 'assistant',
@@ -167,8 +205,7 @@ export default class OpenAIChatService
       {
         role: 'tool',
         name: tool.name,
-        content:
-          typeof toolResult === 'string' ? toolResult : toolResult.content,
+        content: getToolResultContent(toolResult),
         tool_call_id: tool.id,
       },
     ];
